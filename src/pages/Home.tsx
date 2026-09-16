@@ -10,6 +10,7 @@ import { filterMemories } from '../utils/helpers';
 import type { SmellMemory } from '../utils/constants';
 import type { MemoryInput } from '../store/memoryStore';
 import { BookOpenCheck } from 'lucide-react';
+import SiteNav from '../components/lab/SiteNav';
 
 const defaultFilters: Filters = {
   smellType: '',
@@ -68,6 +69,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
+      <SiteNav />
       <Header onAdd={openAddModal} memoryCount={memories.length} />
 
       <main className="container max-w-6xl pb-20">

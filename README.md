@@ -1,57 +1,31 @@
-# React + TypeScript + Vite
+# 旧房间气味记忆库 · Scent Archive
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite + Tailwind + Zustand 的气味档案应用。除气味记忆的浏览、筛选、编辑与可视化外，还内置「房间扩散与通风实验室」。
 
-Currently, two official plugins are available:
+## 功能
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **气味档案**：封存气味记忆，按类型 / 季节 / 情绪筛选、编辑、删除，并提供强度分布等可视化。
+- **房间扩散与通风实验室**（路由 `/lab`）：
+  - 每段记忆可登记房间长 / 宽 / 层高、气味强度、源点位置（含源斑半径）、通风口位置 / 有效面积 / 排风量。
+  - 可设置扩散系数 D、网格步长 dx/dy、时间步长 dt、总时长与安全阈值。
+  - 显式 FTCS 二维扩散（实时 CFL 稳定校验），四壁 Neumann 无通量；通风口按有限体积「单元汇」排风并逐步入账。
+  - 输出各时刻各点浓度、每格首次降到阈值的时间、最晚散去位置；提供浓度场 / 首达时间热图、阈值等值线、点击探针读数与按时间步回放。
+  - **总量严格守恒**：封闭房间 Σ浓度·格体积恒定；通风时「室内余量 + 风口累计排出 = 初始量」（残差为机器精度 ~1e-13）。封闭房间气味不会凭空消失，只扩散至均匀。
+  - 参数校验会拦住并说明：网格过密、时间步 / 算量爆炸、dt 越过 CFL 稳定条件、尺寸 / 面积 / 风量为负、面积为 0 却给风量、源点或风口在墙外等；支持一键采用稳定安全步长。
+  - 多套方案可另存（localStorage 持久化，含旧数据迁移），刷新后仍在；`/lab/compare` 支持 2~4 套方案并排比较散去时间、最晚点与参数。
+- 任意记忆卡片上的「扩散模拟」入口会以该记忆的强度预填参数。
 
-## Expanding the ESLint configuration
+## 开发
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm install
+npm run dev
+npm run build   # tsc -b && vite build
+npm run lint
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 数值模型说明
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  extends: [
-    // other configs...
-    // Enable lint rules for React
-    reactX.configs['recommended-typescript'],
-    // Enable lint rules for React DOM
-    reactDom.configs.recommended,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+- 初始场为源点周围半径 `sourceRadius` 圆内浓度 = 气味强度（1~10）；浓度采用与气味强度同尺度的归一化浓度，安全阈值与该尺度一致。
+- 扩散方程 `∂C/∂t = D∇²C`，显式中心差分，稳定条件 `D·dt·(1/dx² + 1/dy²) ≤ 0.5`。
+- 排风口单元每步衰减 `β·dt`（`β = Q / (min(A口, A格)·H)`，量纲 1/s），限幅保正；衰减量计入累计排出。

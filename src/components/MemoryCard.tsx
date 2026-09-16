@@ -1,7 +1,8 @@
 import type { SmellMemory } from '../utils/constants';
 import { getSeasonInfo, getSmellTypeInfo, getEmotionInfo } from '../utils/constants';
 import { formatDate, contrastTextColor } from '../utils/helpers';
-import { Pencil, Trash2, ChevronDown, ChevronUp, Heart } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, ChevronUp, Heart, Wind } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface Props {
   memory: SmellMemory;
@@ -146,6 +147,14 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
                   <span>更新于 {formatDate(memory.updated_at)}</span>
                 </div>
                 <div className="flex items-center gap-1">
+                  <Link
+                    to={`/lab?memory=${memory.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-moss-600 hover:bg-moss-100 transition-colors"
+                    title="以此记忆为气味源，推演房间扩散与散去"
+                  >
+                    <Wind className="w-3.5 h-3.5" /> 扩散模拟
+                  </Link>
                   <button
                     onClick={(e) => { e.stopPropagation(); onEdit(); }}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-ochre-600 hover:bg-ochre-100 transition-colors"
@@ -165,6 +174,14 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
 
           {!isExpanded && (
             <div className="px-4 pb-3 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 -mt-1">
+              <Link
+                to={`/lab?memory=${memory.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-moss-600 hover:bg-moss-100 transition-colors"
+                title="扩散与散去模拟"
+              >
+                <Wind className="w-3.5 h-3.5" />
+              </Link>
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(); }}
                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-ochre-600 hover:bg-ochre-100 transition-colors"
