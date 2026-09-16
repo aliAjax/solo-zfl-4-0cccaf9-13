@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { SmellMemory, Season, SmellType, Emotion } from '../utils/constants';
 import { generateId } from '../utils/helpers';
 import { mockMemories } from '../data/mockData';
+import type { RoomSetup } from '../diffusion/types';
+import { normalizeRoomSetup } from '../diffusion/presets';
 
 export interface MemoryInput {
   location: string;
@@ -21,6 +23,8 @@ interface MemoryStore {
   memories: SmellMemory[];
   addMemory: (input: MemoryInput) => void;
   updateMemory: (id: string, input: MemoryInput) => void;
+  /** 只写入房间登记字段，记忆其它内容一律不动 */
+  updateMemoryRoom: (id: string, room: RoomSetup) => void;
   deleteMemory: (id: string) => void;
   initIfEmpty: () => void;
 }
@@ -48,6 +52,15 @@ export const useMemoryStore = create<MemoryStore>()(
           ),
         });
       },
+      updateMemoryRoom: (id, room) => {
+        set({
+          memories: get().memories.map((m) =>
+            m.id === id
+              ? { ...m, room: structuredClone(room), updated_at: new Date().toISOString() }
+              : m,
+          ),
+        });
+      },
       deleteMemory: (id) => {
         set({ memories: get().memories.filter((m) => m.id !== id) });
       },
@@ -63,3 +76,11 @@ export const useMemoryStore = create<MemoryStore>()(
     },
   ),
 );
+
+/**
+ * 读取某记忆的房间登记：旧记忆没有 room 字段时合并默认值返回，
+ * 不写回存储、不动记忆的任何其它内容。
+ */
+export function getMemoryRoomSetup(memory: Pick<SmellMemory, 'room'> | undefined | null): RoomSetup {
+  return normalizeRoomSetup(memory?.room);
+}

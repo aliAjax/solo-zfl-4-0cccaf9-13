@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Check, Copy, Pencil, Trash2, GitCompareArrows } from 'lucide-react';
+import { Check, Copy, Pencil, Trash2, GitCompareArrows, Link2 } from 'lucide-react';
 import { useScenarioStore } from '../../store/scenarioStore';
+import { useMemoryStore } from '../../store/memoryStore';
 import { formatDate } from '../../utils/helpers';
 import { validateParams } from '../../diffusion/simulator';
 
@@ -12,6 +13,7 @@ interface Props {
 
 export default function ScenarioBar({ activeId, onLoad, compact }: Props) {
   const { scenarios, compareIds, toggleCompare, deleteScenario, duplicateScenario } = useScenarioStore();
+  const memories = useMemoryStore((s) => s.memories);
 
   if (scenarios.length === 0) {
     return (
@@ -21,6 +23,7 @@ export default function ScenarioBar({ activeId, onLoad, compact }: Props) {
     );
   }
 
+  void compact;
   return (
     <div className={`space-y-2 ${compact ? '' : ''}`}>
       {scenarios.map((s) => {
@@ -53,6 +56,18 @@ export default function ScenarioBar({ activeId, onLoad, compact }: Props) {
                 <span className="font-serif text-sm font-semibold text-ink-800 truncate flex-1">
                   {s.params.name || '未命名方案'}
                 </span>
+                {s.memoryId && (() => {
+                  const mem = memories.find((m) => m.id === s.memoryId);
+                  return mem ? (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-moss-100 text-moss-600 shrink-0"
+                      title={`关联记忆：${mem.location}（方案是独立快照，不会改动记忆）`}
+                    >
+                      <Link2 className="w-2.5 h-2.5" />
+                      {mem.location}
+                    </span>
+                  ) : null;
+                })()}
                 {!v.ok && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brick-400/15 text-brick-600 shrink-0">
                     待修正

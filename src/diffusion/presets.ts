@@ -1,4 +1,5 @@
-import type { SimParams, Vent } from './types';
+import type { SimParams, Vent, RoomSetup } from './types';
+import type { SmellMemory } from '../utils/constants';
 import { generateId } from '../utils/helpers';
 
 export function makeVent(partial?: Partial<Vent>): Vent {
@@ -34,15 +35,105 @@ export function createDefaultParams(overrides: Partial<SimParams> = {}): SimPara
   };
 }
 
-/** 从某段气味记忆带出默认参数（强度取记忆的 1~10 分） */
-export function paramsFromMemory(memory: {
-  location: string;
-  intensity: number;
-}): SimParams {
-  return createDefaultParams({
+/** 默认房间登记（不含 name/intensity） */
+export function defaultRoomSetup(): RoomSetup {
+  const p = createDefaultParams();
+  return {
+    roomLength: p.roomLength,
+    roomWidth: p.roomWidth,
+    roomHeight: p.roomHeight,
+    sourceX: p.sourceX,
+    sourceY: p.sourceY,
+    sourceRadius: p.sourceRadius,
+    vents: p.vents.map((v) => ({ ...v })),
+    diffusionCoeff: p.diffusionCoeff,
+    dx: p.dx,
+    dy: p.dy,
+    totalTime: p.totalTime,
+    dt: p.dt,
+    threshold: p.threshold,
+  };
+}
+
+/**
+ * 合并一份可能残缺的房间登记与默认值（旧记忆缺字段时逐字段补齐，
+ * 不改动记忆的其它内容，也不持久化默认值）。
+ */
+export function normalizeRoomSetup(raw: Partial<RoomSetup> | undefined | null): RoomSetup {
+  const d = defaultRoomSetup();
+  if (!raw || typeof raw !== 'object') return structuredCloneSafe(d);
+  const vents = Array.isArray(raw.vents)
+    ? raw.vents
+        .filter((v) => v && typeof v === 'object')
+        .map((v) => ({
+          id: typeof v.id === 'string' && v.id ? v.id : generateId(),
+          x: numOr(v.x, d.vents[0]?.x ?? 5.5),
+          y: numOr(v.y, d.vents[0]?.y ?? 2),
+          // 面积必须为正（负值视为脏数据回退默认）；风量允许 0（风口关闭）
+          area: posOr(v.area, 0.09),
+          flow: nonNegOr(v.flow, 0),
+        }))
+    : structuredCloneSafe(d.vents);
+  return {
+    roomLength: posOr(raw.roomLength, d.roomLength),
+    roomWidth: posOr(raw.roomWidth, d.roomWidth),
+    roomHeight: posOr(raw.roomHeight, d.roomHeight),
+    sourceX: numOr(raw.sourceX, d.sourceX),
+    sourceY: numOr(raw.sourceY, d.sourceY),
+    sourceRadius: nonNegOr(raw.sourceRadius, d.sourceRadius),
+    vents,
+    diffusionCoeff: nonNegOr(raw.diffusionCoeff, d.diffusionCoeff),
+    dx: posOr(raw.dx, d.dx),
+    dy: posOr(raw.dy, d.dy),
+    totalTime: posOr(raw.totalTime, d.totalTime),
+    dt: posOr(raw.dt, d.dt),
+    threshold: posOr(raw.threshold, d.threshold),
+  };
+}
+
+function numOr(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+/** 必须为正；非法（含负数、0、NaN）回退默认 */
+function posOr(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback;
+}
+/** 必须非负；负数/NaN 回退默认，0 保留 */
+function nonNegOr(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
+function structuredCloneSafe<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T;
+}
+
+/** 从记忆带出模拟参数：有房间登记用登记（逐字段补默认），没有则用默认房间；强度取记忆 */
+export function paramsFromMemory(memory: Pick<SmellMemory, 'location' | 'intensity' | 'room'>): SimParams {
+  const setup = normalizeRoomSetup(memory.room);
+  return {
     name: `${memory.location}·散去推演`,
     intensity: memory.intensity,
-  });
+    ...setup,
+  };
+}
+
+/** 把当前参数中的房间登记部分提取出来（用于保存回记忆，不含 name/intensity） */
+export function roomSetupFromParams(p: SimParams): RoomSetup {
+  return {
+    roomLength: p.roomLength,
+    roomWidth: p.roomWidth,
+    roomHeight: p.roomHeight,
+    sourceX: p.sourceX,
+    sourceY: p.sourceY,
+    sourceRadius: p.sourceRadius,
+    vents: p.vents.map((v) => ({ ...v })),
+    diffusionCoeff: p.diffusionCoeff,
+    dx: p.dx,
+    dy: p.dy,
+    totalTime: p.totalTime,
+    dt: p.dt,
+    threshold: p.threshold,
+  };
 }
 
 export interface ScenarioSeed {

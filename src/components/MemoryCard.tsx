@@ -1,7 +1,7 @@
 import type { SmellMemory } from '../utils/constants';
 import { getSeasonInfo, getSmellTypeInfo, getEmotionInfo } from '../utils/constants';
 import { formatDate, contrastTextColor } from '../utils/helpers';
-import { Pencil, Trash2, ChevronDown, ChevronUp, Heart, Wind } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, ChevronUp, Heart, Wind, House } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface Props {
@@ -79,6 +79,16 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
                 <span className="scent-tag bg-moss-100 text-moss-600">
                   <Heart className="w-3 h-3 fill-current" /> 想再闻
                 </span>
+              )}
+              {memory.room && (
+                <Link
+                  to={`/lab?memory=${memory.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="scent-tag bg-moss-500/15 text-moss-600 hover:bg-moss-500/25 transition-colors"
+                  title="已保存房间登记，点击继续模拟"
+                >
+                  <House className="w-3 h-3" /> 房间已登记
+                </Link>
               )}
             </div>
 

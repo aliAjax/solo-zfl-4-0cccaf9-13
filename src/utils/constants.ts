@@ -1,3 +1,5 @@
+import type { RoomSetup } from '../diffusion/types';
+
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 export type SmellType = 'woody' | 'floral' | 'fruity' | 'earthy' | 'spicy' | 'sweet' | 'musty' | 'fresh' | 'burnt' | 'other';
 export type Emotion = 'warm' | 'nostalgic' | 'peaceful' | 'melancholy' | 'joyful' | 'uncomfortable' | 'surprising';
@@ -16,6 +18,8 @@ export interface SmellMemory {
   want_again: boolean;
   created_at: string;
   updated_at: string;
+  /** 该记忆登记的房间与扩散/通风参数；旧记忆没有该字段，读取时补默认值 */
+  room?: RoomSetup;
 }
 
 export const SEASONS: { value: Season; label: string; emoji: string }[] = [

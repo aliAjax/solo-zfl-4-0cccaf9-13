@@ -35,6 +35,13 @@ export interface SimParams {
   threshold: number;      // 安全阈值（归一化浓度）
 }
 
+/**
+ * 房间登记：挂在某段气味记忆上的物理参数。
+ * 不含 name（方案名）与 intensity（直接复用记忆自身的气味强度 1~10），
+ * 因此强度只有记忆这一处真相，避免两边不一致。
+ */
+export type RoomSetup = Omit<SimParams, 'name' | 'intensity'>;
+
 /** 参数归一化后的网格信息 */
 export interface GridInfo {
   nx: number;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Play, Pause, RotateCcw, Save, Plus, Loader2, XCircle, GitCompareArrows, Wind } from 'lucide-react';
+import { Play, Pause, RotateCcw, Save, Plus, Loader2, XCircle, GitCompareArrows, Wind, House } from 'lucide-react';
 import SiteNav from '../components/lab/SiteNav';
 import ParamForm from '../components/lab/ParamForm';
 import FieldCanvas, { type ProbePoint } from '../components/lab/FieldCanvas';
@@ -8,7 +8,7 @@ import ResultPanel from '../components/lab/ResultPanel';
 import ScenarioBar from '../components/lab/ScenarioBar';
 import { validateParams, runSimulationAsync } from '../diffusion/simulator';
 import type { SimParams, SimResult } from '../diffusion/types';
-import { createDefaultParams, paramsFromMemory } from '../diffusion/presets';
+import { createDefaultParams, paramsFromMemory, roomSetupFromParams } from '../diffusion/presets';
 import { useScenarioStore } from '../store/scenarioStore';
 import { useMemoryStore } from '../store/memoryStore';
 import { formatDuration, formatDurationShort, fmtNum } from '../diffusion/format';
@@ -18,9 +18,14 @@ export default function LabPage() {
   const { scenarios, addScenario, updateScenario, compareIds, seedIfEmpty } = useScenarioStore();
   const memories = useMemoryStore((s) => s.memories);
   const initIfEmpty = useMemoryStore((s) => s.initIfEmpty);
+  const updateMemoryRoom = useMemoryStore((s) => s.updateMemoryRoom);
 
   const [params, setParams] = useState<SimParams>(() => createDefaultParams());
   const [loadedId, setLoadedId] = useState<string | null>(null);
+  /** 当前会话关联的记忆（?memory= 或方案自带的 memoryId）；只有显式保存才写回该记忆 */
+  const [linkedMemoryId, setLinkedMemoryId] = useState<string | null>(null);
+  /** 房间登记相对关联记忆是否有未保存修改 */
+  const [roomDirty, setRoomDirty] = useState(false);
   const [paramsVersion, setParamsVersion] = useState(0);
   const [result, setResult] = useState<SimResult | null>(null);
   const [runVersion, setRunVersion] = useState(0);
@@ -39,38 +44,54 @@ export default function LabPage() {
     initIfEmpty();
   }, [seedIfEmpty, initIfEmpty]);
 
-  // URL 预填：?scenario= 载入已存方案，?memory= 从气味记忆带入
+  // 把一组参数载入到表单（方案或记忆）；程序载入不算"未保存修改"
+  const applyParams = useCallback(
+    (next: SimParams, opts: { scenarioId?: string | null; memoryId?: string | null } = {}) => {
+      setParams({ ...next, vents: next.vents.map((v) => ({ ...v })) });
+      setLoadedId(opts.scenarioId ?? null);
+      setLinkedMemoryId(opts.memoryId ?? null);
+      setParamsVersion((v) => v + 1);
+      setRoomDirty(false);
+      setResult(null);
+      setPinned(null);
+    },
+    [],
+  );
+
+  // URL 预填：?scenario= 载入已存方案，?memory= 从气味记忆带出房间登记。
+  // 用 ref 保证同一个 URL 只应用一次——否则新增方案导致 scenarios.length
+  // 变化时会重新覆盖表单（如把刚另存方案的 loadedId 冲掉）。
+  const appliedUrlRef = useRef<string | null>(null);
   useEffect(() => {
+    const urlKey = searchParams.toString();
+    if (appliedUrlRef.current === urlKey) return;
     const sid = searchParams.get('scenario');
     const mid = searchParams.get('memory');
     if (sid) {
       const s = scenarios.find((x) => x.id === sid);
-      if (s) {
-        setParams({ ...s.params, vents: s.params.vents.map((v) => ({ ...v })) });
-        setLoadedId(s.id);
-        setParamsVersion((v) => v + 1);
-        setResult(null);
-        return;
-      }
+      if (!s) return; // 数据尚未就绪，等下一次（seeding 后）再试
+      appliedUrlRef.current = urlKey;
+      applyParams(s.params, { scenarioId: s.id, memoryId: s.memoryId ?? null });
+      return;
     }
     if (mid) {
       const m = memories.find((x) => x.id === mid);
-      if (m) {
-        setParams(paramsFromMemory(m));
-        setLoadedId(null);
-        setParamsVersion((v) => v + 1);
-        setResult(null);
-      }
+      if (!m) return;
+      appliedUrlRef.current = urlKey;
+      applyParams(paramsFromMemory(m), { memoryId: m.id });
+      return;
     }
-    // 仅在首次拿到数据后处理一次
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, scenarios.length, memories.length]);
+    appliedUrlRef.current = urlKey; // /lab 无参数：保留默认草稿
+  }, [searchParams, scenarios, memories, applyParams]);
 
   const validation = useMemo(() => validateParams(params), [params]);
+
+  const linkedMemory = linkedMemoryId ? memories.find((m) => m.id === linkedMemoryId) ?? null : null;
 
   const handleChange = (next: SimParams) => {
     setParams(next);
     setParamsVersion((v) => v + 1);
+    setRoomDirty(true);
     setSaveMsg(null);
   };
 
@@ -116,9 +137,14 @@ export default function LabPage() {
   const dirty = result !== null && paramsVersion !== runVersion;
 
   const saveAsNew = () => {
-    const id = addScenario({ name: params.name || '未命名方案', params, memoryId: null });
+    // 方案保留对记忆的关联，但只是一份快照，绝不回写记忆
+    const id = addScenario({
+      name: params.name || '未命名方案',
+      params,
+      memoryId: linkedMemoryId,
+    });
     setLoadedId(id);
-    setSaveMsg('已另存为新方案');
+    setSaveMsg('已另存为新方案（与当前记忆保持关联）');
     setTimeout(() => setSaveMsg(null), 2500);
   };
   const saveExisting = () => {
@@ -127,14 +153,20 @@ export default function LabPage() {
     setSaveMsg('方案已更新');
     setTimeout(() => setSaveMsg(null), 2500);
   };
+  /** 把房间尺寸/源点/风口/扩散参数写回关联记忆（只动 room 字段，强度等其它内容不变） */
+  const saveRoomToMemory = () => {
+    if (!linkedMemoryId) return;
+    updateMemoryRoom(linkedMemoryId, roomSetupFromParams(params));
+    setRoomDirty(false);
+    const label = linkedMemory ? `记忆「${linkedMemory.location}」` : '该记忆';
+    setSaveMsg(`房间登记已保存到${label}，下次打开自动带出`);
+    setTimeout(() => setSaveMsg(null), 3000);
+  };
 
   const loadScenario = (id: string) => {
     const s = scenarios.find((x) => x.id === id);
     if (!s) return;
-    setParams({ ...s.params, vents: s.params.vents.map((v) => ({ ...v })) });
-    setLoadedId(id);
-    setParamsVersion((v) => v + 1);
-    setResult(null);
+    applyParams(s.params, { scenarioId: id, memoryId: s.memoryId ?? null });
     setSearchParams({ scenario: id }, { replace: true });
   };
 
@@ -225,9 +257,28 @@ export default function LabPage() {
                     <Plus className="w-3.5 h-3.5" /> 另存为新方案
                   </button>
                 </div>
-                <div className="flex items-center justify-between text-[11px]">
+                {linkedMemory && (
+                  <button
+                    type="button"
+                    onClick={saveRoomToMemory}
+                    className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium rounded-xl px-4 py-2.5 transition-all duration-200 bg-moss-500 hover:bg-moss-600 text-paper-50 shadow-paper hover:-translate-y-0.5 active:translate-y-0"
+                    title="把房间尺寸、源点、风口风量与扩散参数保存到这一段记忆，下次从卡片进入自动带出"
+                  >
+                    <House className="w-3.5 h-3.5" />
+                    保存房间登记到记忆「{linkedMemory.location}」
+                    {roomDirty && <span className="ml-1 w-2 h-2 rounded-full bg-paper-50 animate-pulse" />}
+                  </button>
+                )}
+                <div className="flex items-start justify-between gap-2 text-[11px] leading-relaxed">
                   <span className={saveMsg ? 'text-moss-600' : 'text-ink-700/45'}>
-                    {saveMsg ?? (loadedId ? `正在编辑：${params.name || '未命名方案'}` : '当前为未保存草稿，刷新会丢失（已存方案不受影响）')}
+                    {saveMsg ??
+                      (linkedMemory
+                        ? roomDirty
+                          ? `房间登记尚未保存到记忆「${linkedMemory.location}」（改参数不影响记忆，点上方按钮才写入）`
+                          : `正在用记忆「${linkedMemory.location}」的房间登记，已保存`
+                        : loadedId
+                          ? `正在编辑方案：${params.name || '未命名方案'}`
+                          : '当前为未保存草稿，刷新会丢失（已存方案与记忆不受影响）')}
                   </span>
                 </div>
               </div>
